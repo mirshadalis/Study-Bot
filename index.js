@@ -174,42 +174,79 @@ client.on("message", async (message) => {
       console.error("Error fetching study data:", error);
       message.channel.send("An error occurred while fetching your stats.");
     }
-  }else if (command === "lb") {
-    db.all(
-      `SELECT * FROM studyTimes ORDER BY total DESC LIMIT 10`,
-      (err, rows) => {
-        if (err) {
-          console.error("Error fetching data:", err);
-          message.channel.send(
-            "An error occurred while fetching the leaderboard."
+  } else if (command === "lb") {
+    let page = 0;
+    const itemsPerPage = 10;
+
+    const generateEmbed = (rows) => {
+      const embed = new Discord.MessageEmbed()
+        .setColor('#0099ff')
+        .setTitle('Study Leaderboard')
+        .setDescription(`Page ${page + 1}`)
+        .setTimestamp();
+
+      const start = page * itemsPerPage;
+      const end = start + itemsPerPage;
+
+      rows.slice(start, end).forEach((row, index) => {
+        const member = message.guild.members.cache.get(row.userId);
+        if (member) {
+          embed.addField(
+            `${start + index + 1}. ${member.user.username}#${member.user.discriminator}`,
+            `${row.total.toFixed(2)} hours`
           );
-          return;
         }
+      });
 
-        if (rows.length === 0){
-          message.channel.send("No study hours records found or no users are available!");
-          return;
-        }
+      return embed;
+    };
 
-        const leaderboardEmbed = new Discord.MessageEmbed()
-          .setColor('#0099ff')
-          .setTitle('Study Leaderboard')
-          .setDescription('Top 10 Users by Study Time')
-          .setTimestamp();
-        
-        let count = 1;
-        rows.forEach((row) => {
-          let member = message.guild.members.cache.get(row.userId);
-          if (member){
-            let userHours = row.total.toFixed(2);
-            leaderboardEmbed.addField(`${count}. ${member.user.username}#${member.user.discriminator}`, `${userHours} hours`);
-            count++;
+    db.all(`SELECT * FROM studyTimes ORDER BY total DESC`, (err, rows) => {
+      if (err) {
+        console.error("Error fetching data:", err);
+        message.channel.send(
+          "An error occurred while fetching the leaderboard."
+        );
+        return;
+      }
+
+      if (rows.length === 0) {
+        message.channel.send("No study records found or no users are available!");
+        return;
+      }
+
+      const embedMessage = async() => {await message.channel.send({ embeds: [generateEmbed(rows)] });
+
+      if (rows.length > itemsPerPage) {
+        await embedMessage.react('⬅️');
+        await embedMessage.react('➡️');
+
+        const filter = (reaction, user) => {
+          return ['⬅️', '➡️'].includes(reaction.emoji.name) && !user.bot;
+        };
+
+        const collector = embedMessage.createReactionCollector({ filter, time: 60000 });
+
+        collector.on('collect', (reaction) => {
+          if (reaction.emoji.name === '➡️') {
+            if ((page + 1) * itemsPerPage < rows.length) {
+              page++;
+              embedMessage.edit({ embeds: [generateEmbed(rows)] });
+            }
+          } else if (reaction.emoji.name === '⬅️') {
+            if (page > 0) {
+              page--;
+              embedMessage.edit({ embeds: [generateEmbed(rows)] });
+            }
           }
         });
 
-        message.channel.send({ embeds: [leaderboardEmbed] });
+        collector.on('end', () => {
+          embedMessage.reactions.removeAll().catch(console.error);
+        });
       }
-    );
+    };
+    });
   } else if (command === "p") {
 
     const studyRoles = [
@@ -358,3 +395,5 @@ client.on("message", async (message) => {
 });
 
 client.login(token);
+
+// 04-07 15:02 - Change made : Only Allowed in Channel BOT_COMMANDS
