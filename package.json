@@ -1,0 +1,17 @@
+{
+  "name": "study-tracker-bot",
+  "version": "1.0.0",
+  "description": "A Discord bot to track study time",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^12.5.1",
+    "sqlite3": "^5.1.2",
+    "dotenv": "^10.0.0"
+  },
+  "engines": {
+    "node": "14.x"
+  }
+}
