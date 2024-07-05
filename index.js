@@ -186,26 +186,28 @@ client.on("message", async (message) => {
           return;
         }
 
-        let leaderboardText = "**Study Leaderboard**\n--------------------\n";
-        let count = 0;
+        if (rows.length === 0){
+          message.channel.send("No study hours records found or no users are available!");
+          return;
+        }
 
+        const leaderboardEmbed = new Discord.MessageEmbed()
+          .setColor('#0099ff')
+          .setTitle('Study Leaderboard')
+          .setDescription('Top 10 Users by Study Time')
+          .setTimestamp();
+        
+        let count = 1;
         rows.forEach((row) => {
           let member = message.guild.members.cache.get(row.userId);
-          if (member) {
-            let userHours = row.total.toFixed(2); // Directly using hours from the database
-            leaderboardText += `${count + 1}. \`${
-              member.user.username
-            }#${member.user.discriminator}\`: ${userHours} hours\n`;
+          if (member){
+            let userHours = row.total.toFixed(2);
+            leaderboardEmbed.addField(`${count}. ${member.user.username}#${member.user.discriminator}`, `${userHours} hours`);
             count++;
           }
         });
 
-        if (count === 0) {
-          leaderboardText =
-            "No study records found or no users are available!";
-        }
-
-        message.channel.send(leaderboardText);
+        message.channel.send({ embeds: [leaderboardEmbed] });
       }
     );
   } else if (command === "p") {
