@@ -63,7 +63,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
     !oldState.channel &&
     newState.channel &&
     (newState.channel.parent?.name.toLowerCase().includes("voice channels") ||
-    newState.channel..parent?.name.toLowerCase().includes("custom rooms"));
+    newState.channel.parent?.name.toLowerCase().includes("custom rooms"));
   const isLeaving = oldState.channel && !newState.channel;
 
   if (isJoining || isLeaving) {
