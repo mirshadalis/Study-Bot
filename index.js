@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.j
 const sqlite3 = require('sqlite3').verbose();
 require('dotenv').config();
 const fs = require('fs');
-const { MessageChannel } = require('worker_threads');
 const token = process.env.TOKEN;
 
 const client = new Client({
@@ -18,8 +17,7 @@ const client = new Client({
 
 const PREFIX = "-";
 const dbPath = "./databases.sqlite";
-const botCommandsId = process.env.BOTCOMMANDS;
-const serverManagementCategory = process.env.SERVER_MANAGEMENT
+const botCommandsId = "1252940156927742065"; 
 
 const dbExists = fs.existsSync(dbPath);
 
@@ -139,7 +137,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 client.on("messageCreate", async (message) => {
   if (!message.content.startsWith(PREFIX) || message.author.bot) return;
 
-  if (message.channel.id !== botCommandsId && message.channel.parentId !== serverManagementCategory) return;
+  if (message.channel.id !== botCommandsId) return;
 
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
