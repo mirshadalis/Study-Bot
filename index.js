@@ -274,7 +274,7 @@ client.on("messageCreate", async (message) => {
       {
         name: "Junior Scholar",
         time: millisecondsToHours(3 * 60 * 60 * 1000), 
-        roleId: "1254722592837861426",
+        roleId: "1254722592837861426", 
       },
       {
         name: "Adept Scholar",
@@ -289,33 +289,54 @@ client.on("messageCreate", async (message) => {
       {
         name: "Seasoned Scholar",
         time: millisecondsToHours(15 * 60 * 60 * 1000), 
-        roleId: "1254723152871977032",
+        roleId: "1254723284969197588",
+      },
+      {
+        name: "Advanced Scholar",
+        time: millisecondsToHours(15 * 60 * 60 * 1000), 
+        roleId: "1254723284969197588",
       },
       {
         name: "Expert Scholar",
         time: millisecondsToHours(20 * 60 * 60 * 1000),
-        roleId: "1254723261211631789",
-      },
-      {
-        name: "Senior Scholar",
-        time: millisecondsToHours(25 * 60 * 60 * 1000), 
-        roleId: "1254723427745726624",
+        roleId: "1254723566729953342",
       },
       {
         name: "Master Scholar",
         time: millisecondsToHours(30 * 60 * 60 * 1000), 
-        roleId: "1254723553560408135",
+        roleId: "1254723709458059339",
+      },
+      
+      {
+        name: "Senior Scholar",
+        time: millisecondsToHours(25 * 60 * 60 * 1000), 
+        roleId: "1254723826034409482",
       },
       {
-        name: "Sage Scholar",
+        name: "Elite Scholar",
         time: millisecondsToHours(40 * 60 * 60 * 1000), 
         roleId: "1254723724854390865",
+      },
+      {
+        name: "Prodigious Scholar",
+        time: millisecondsToHours(50 * 60 * 60 * 1000), 
+        roleId: "1254723824964859965",
+      },
+      {
+        name: "Renowned Scholar",
+        time: millisecondsToHours(50 * 60 * 60 * 1000), 
+        roleId: "1254723824964859965",
       },
       {
         name: "Legendary Scholar",
         time: millisecondsToHours(50 * 60 * 60 * 1000), 
         roleId: "1254723824964859965",
       },
+      {
+        name: "Eminent Scholar",
+        time: millisecondsToHours(50 * 60 * 60 * 1000), 
+        roleId: "1254723824964859965",
+      }
     ];
 
     const userId = message.author.id;
