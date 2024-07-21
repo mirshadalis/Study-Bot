@@ -178,6 +178,10 @@ client.on("voiceStateUpdate", (oldState, newState) => {
   }
 });
 
+function padString(input, width) {
+  return input.padEnd(width);
+}
+
 client.on("messageCreate", async (message) => {
   if (!message.content.startsWith(PREFIX) || message.author.bot) return;
 
@@ -212,45 +216,21 @@ client.on("messageCreate", async (message) => {
         let daily  = row.daily.toFixed(2);
         let monthly = row.monthly.toFixed(2);
         let weekly = row.weekly.toFixed(2);
-        const embedContent = `
-\`\`\`
-Timeframe      Hours      Place
----------      -----      -----
-Daily:        ${daily}h    #${dailyRank.toString().padStart(5, ' ')}
-Weekly:       ${weekly}h   #$${weeklyRank.toString().padStart(5, ' ')}
-Monthly:     ${monthly}h   #${monthlyRank.toString().padStart(5, ' ')}
-All-time:   ${totalHours}h #${allTimeRank.toString().padStart(5, ' ')}
-
-Current study streak: ${row.streak} days 
-Longest study streak: ${row.longestStreak} days
-\`\`\`
-        `;
+        const columnWidths = [15, 10, 5];
+        let header = `${padString("Timeframe", columnWidths[0])}${padString("Hours", columnWidths[1])}${padString("Place", columnWidths[2])}`;
+        let dailyRow = `${padString("Daily:", columnWidths[0])}${padString(`${daily}h`, columnWidths[1])}${padString(`#${dailyRank}`, columnWidths[2])}`;
+        let weeklyRow = `${padString("Weekly:", columnWidths[0])}${padString(`${weekly}h`, columnWidths[1])}${padString(`#${weeklyRank}`, columnWidths[2])}`;
+        let monthlyRow = `${padString("Monthly:", columnWidths[0])}${padString(`${monthly}h`, columnWidths[1])}${padString(`#${monthlyRank}`, columnWidths[2])}`;
+        let allTimeRow = `${padString("All-time:", columnWidths[0])}${padString(`${totalHours}h`, columnWidths[1])}${padString(`#${allTimeRank}`, columnWidths[2])}`;
+        let currentStreak = `Current study streak: ${row.streak} day${row.streak > 1 ? 's' : ''}`;
+        let longestStreak = `Longest study streak: ${row.longestStreak} day${row.longestStreak > 1 ? 's' : ''}`;
+        const embedContent = "\`\`\`css\n" +  header + '\n\n' + dailyRow + '\n' + weeklyRow + '\n' + monthlyRow + '\n' + allTimeRow +'\n\n' + currentStreak + '\n' + longestStreak + "\`\`\`";
         const statsEmbed = new EmbedBuilder()
         .setColor("5095FF")
         .setDescription("```Study Performance Summary```\n" + embedContent)
-        //.setDescription("```Study Performance Summary```\n```Timeframe\tHours\tPlace\nDaily:\t0.0\t#1```")
-        // .addFields(
-        //     { name: '**Timeframe**', value: 'Daily:', inline: true },
-        //     { name: '**Hours**', value: `${daily}h`, inline: true },
-        //     { name: '**Place**', value: `#${dailyRank}`, inline: true },
-        //     { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
-        //     { name: 'Monthly:', value: `${monthly}h`, inline: true },
-        //     { name: '\u200B', value: `#${monthlyRank}`, inline: true },
-        //     { name: 'All-time:', value: `${totalHours}h`, inline: true },
-        //     { name: '\u200B', value: `#${allTimeRank}`, inline: true }
-        //   )
         .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL()});
         
         const statsEmbedMessage = await message.channel.send({ embeds: [statsEmbed] });
-        // message.channel.send(`
-        //   **Your Study Stats:**
-        //   Total: ${totalHours} hours 
-        //   Daily: ${daily} hours (Rank: ${dailyRank}) 
-        //   Monthly: ${monthly} hours (Rank: ${monthlyRank})
-        //   All-Time: ${totalHours} hours (Rank: ${allTimeRank}) 
-        //   Current Streak: ${row.streak} days
-        //   Longest Streak: ${row.longestStreak} days
-        // `);
       } else {
         message.channel.send(
           `${message.author}, you have no study time recorded!`
@@ -372,74 +352,74 @@ Longest study streak: ${row.longestStreak} days
       },
       {
         name: "Apprentice Scholar",
-        time: millisecondsToHours(1 * 60 * 60 * 1000), 
+        time: 3, 
         roleId: "1254722449300389990",
       },
       {
         name: "Junior Scholar",
-        time: millisecondsToHours(3 * 60 * 60 * 1000), 
-        roleId: "1254722592837861426", 
+        time: 5,
+        roleId: "1254722592837861426",
       },
       {
         name: "Adept Scholar",
-        time: millisecondsToHours(5 * 60 * 60 * 1000), 
+        time: 10, 
         roleId: "1254722732470439967",
       },
       {
         name: "Skilled Scholar",
-        time: millisecondsToHours(10 * 60 * 60 * 1000),
+        time: 15,
         roleId: "1254722933008629780",
       },
       {
         name: "Seasoned Scholar",
-        time: millisecondsToHours(15 * 60 * 60 * 1000), 
+        time: 20, 
         roleId: "1254723284969197588",
       },
       {
         name: "Advanced Scholar",
-        time: millisecondsToHours(15 * 60 * 60 * 1000), 
-        roleId: "1254723284969197588",
+        time: 30, 
+        roleId: "1254723489387249684",
       },
       {
         name: "Expert Scholar",
-        time: millisecondsToHours(20 * 60 * 60 * 1000),
+        time: 40,
         roleId: "1254723566729953342",
       },
       {
         name: "Master Scholar",
-        time: millisecondsToHours(30 * 60 * 60 * 1000), 
+        time: 50, 
         roleId: "1254723709458059339",
       },
       
       {
         name: "Senior Scholar",
-        time: millisecondsToHours(25 * 60 * 60 * 1000), 
+        time: 65,
         roleId: "1254723826034409482",
       },
       {
         name: "Elite Scholar",
-        time: millisecondsToHours(40 * 60 * 60 * 1000), 
-        roleId: "1254723724854390865",
+        time: 80, 
+        roleId: "1254724434758209536",
       },
       {
         name: "Prodigious Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
+        time: 100, 
+        roleId: "1254724538659241997",
       },
       {
         name: "Renowned Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
+        time: 125, 
+        roleId: "1254724607014076497",
       },
       {
         name: "Legendary Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
+        time: 150, 
+        roleId: "1254724710885757009",
       },
       {
         name: "Eminent Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
+        time: 9999999, 
+        roleId: "1254724765659172864",
       }
     ];
 
