@@ -28,7 +28,6 @@ const db = new sqlite3.Database(dbPath, (err) => {
   } else {
     console.log("Connected to database successfully!");
 
-    // Use db.run with a callback for table creation inside db connection check:
     db.run(
       `
        CREATE TABLE IF NOT EXISTS studyTimes (
@@ -36,8 +35,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
          startTime TEXT,
          total REAL DEFAULT 0.0,
          daily REAL DEFAULT 0.0,
+         weekly REAL DEFAULT 0.0,
          monthly REAL DEFAULT 0.0,
-         allTime REAL DEFAULT 0.0,
          streak INTEGER DEFAULT 0,
          lastStudiedDate TEXT,
          longestStreak INTEGER DEFAULT 0
@@ -60,6 +59,7 @@ client.once('ready', () => {
 
 client.on("voiceStateUpdate", (oldState, newState) => {
   let userId = newState.id;
+
   const isJoining =
     !oldState.channel &&
     newState.channel &&
@@ -81,14 +81,15 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 
           let now = new Date();
           let todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          let thisWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
           let thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
           if (isJoining) {
             if (!userData) {
               db.run(
-                `INSERT INTO studyTimes(userId, startTime, total, daily, monthly, allTime, streak, lastStudiedDate) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                [userId, now.toISOString(), 0.0, 0.0, 0.0, 0.0, 0, null],
+                `INSERT INTO studyTimes(userId, startTime, total, daily, weekly, monthly, streak, lastStudiedDate, longestStreak) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, now.toISOString(), 0.0, 0.0, 0.0, 0.0, 0, null, 0],
                 (err) => {
                   if (err) {
                     console.error("Error inserting data:", err);
@@ -119,11 +120,14 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             let dailyHours = (endTime > todayStart)
               ? (endTime - (startTime > todayStart ? startTime : todayStart)) / (1000 * 60 * 60)
               : 0.0;
+            let weeklyHours = (endTime > thisWeekStart)
+              ? (endTime - (startTime > thisWeekStart ? startTime : thisWeekStart)) / (1000 * 60 * 60)
+              : 0.0;
             let monthlyHours = (endTime > thisMonthStart)
               ? (endTime - (startTime > thisMonthStart ? startTime : thisMonthStart)) / (1000 * 60 * 60)
               : 0.0;
 
-            // streak calculation - irshad
+            // streak -irshad
             let lastStudiedDate = userData.lastStudiedDate ? new Date(userData.lastStudiedDate) : null;
             let yesterday = new Date(now);
             yesterday.setDate(yesterday.getDate() - 1);
@@ -140,27 +144,24 @@ client.on("voiceStateUpdate", (oldState, newState) => {
               newStreak = 1; 
             }
 
-            // Update Database
             let newTotal = parseFloat(userData.total) + elapsedHours;
             let newDaily = parseFloat(userData.daily) + dailyHours;
+            let newWeekly = parseFloat(userData.weekly || 0) + weeklyHours; 
             let newMonthly = parseFloat(userData.monthly) + monthlyHours;
-            let newAllTime = parseFloat(userData.allTime) + elapsedHours;
-            let newLongestStreak = userData.longestStreak || 0;
-            if (newStreak > newLongestStreak) {
-              newLongestStreak = newStreak;
-            }
+            let newLongestStreak = Math.max(userData.longestStreak || 0, newStreak);
+
             db.run(
               `UPDATE studyTimes 
                SET startTime = NULL, 
                    total = ?, 
                    daily = ?, 
+                   weekly = ?, 
                    monthly = ?, 
-                   allTime = ?,
                    streak = ?, 
                    lastStudiedDate = ?,
                    longestStreak = ?
                WHERE userId = ?`,
-               [newTotal, newDaily, newMonthly, newAllTime, newStreak, now.toISOString(), newLongestStreak, userId],
+              [newTotal, newDaily, newWeekly, newMonthly, newStreak, now.toISOString(), newLongestStreak, userId], 
               (err) => {
                 if (err) {
                   console.error("Error updating data:", err);
@@ -200,25 +201,56 @@ client.on("messageCreate", async (message) => {
       });
 
       if (row) {
-        // Calculate ranks 
-        const [allTimeRank, monthlyRank, dailyRank] = await Promise.all([
-          calculateRank('allTime', row.allTime),
+        const [allTimeRank, monthlyRank, dailyRank, weeklyRank] = await Promise.all([
+          calculateRank('total', row.total),
           calculateRank('monthly', row.monthly),
           calculateRank('daily', row.daily),
+          calculateRank('weekly', row.weekly),
         ]);
 
         let totalHours = row.total.toFixed(2);
         let daily  = row.daily.toFixed(2);
         let monthly = row.monthly.toFixed(2);
-        message.channel.send(`
-          **Your Study Stats:**
-          Total: ${totalHours} hours 
-          Daily: ${daily} hours (Rank: ${dailyRank}) 
-          Monthly: ${monthly} hours (Rank: ${monthlyRank})
-          All-Time: ${totalHours} hours (Rank: ${allTimeRank}) 
-          Current Streak: ${row.streak} days
-          Longest Streak: ${row.longestStreak} days
-        `);
+        let weekly = row.weekly.toFixed(2);
+        const embedContent = `
+\`\`\`
+Timeframe      Hours      Place
+---------      -----      -----
+Daily:        ${daily}h    #${dailyRank.toString().padStart(5, ' ')}
+Weekly:       ${weekly}h   #$${weeklyRank.toString().padStart(5, ' ')}
+Monthly:     ${monthly}h   #${monthlyRank.toString().padStart(5, ' ')}
+All-time:   ${totalHours}h #${allTimeRank.toString().padStart(5, ' ')}
+
+Current study streak: ${row.streak} days 
+Longest study streak: ${row.longestStreak} days
+\`\`\`
+        `;
+        const statsEmbed = new EmbedBuilder()
+        .setColor("5095FF")
+        .setDescription("```Study Performance Summary```\n" + embedContent)
+        //.setDescription("```Study Performance Summary```\n```Timeframe\tHours\tPlace\nDaily:\t0.0\t#1```")
+        // .addFields(
+        //     { name: '**Timeframe**', value: 'Daily:', inline: true },
+        //     { name: '**Hours**', value: `${daily}h`, inline: true },
+        //     { name: '**Place**', value: `#${dailyRank}`, inline: true },
+        //     { name: '\u200B', value: '\u200B', inline: false }, // Empty field for spacing
+        //     { name: 'Monthly:', value: `${monthly}h`, inline: true },
+        //     { name: '\u200B', value: `#${monthlyRank}`, inline: true },
+        //     { name: 'All-time:', value: `${totalHours}h`, inline: true },
+        //     { name: '\u200B', value: `#${allTimeRank}`, inline: true }
+        //   )
+        .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL()});
+        
+        const statsEmbedMessage = await message.channel.send({ embeds: [statsEmbed] });
+        // message.channel.send(`
+        //   **Your Study Stats:**
+        //   Total: ${totalHours} hours 
+        //   Daily: ${daily} hours (Rank: ${dailyRank}) 
+        //   Monthly: ${monthly} hours (Rank: ${monthlyRank})
+        //   All-Time: ${totalHours} hours (Rank: ${allTimeRank}) 
+        //   Current Streak: ${row.streak} days
+        //   Longest Streak: ${row.longestStreak} days
+        // `);
       } else {
         message.channel.send(
           `${message.author}, you have no study time recorded!`
