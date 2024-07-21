@@ -137,10 +137,10 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 client.on("messageCreate", async (message) => {
   if (!message.content.startsWith(PREFIX) || message.author.bot) return;
 
-  if (message.channel.id !== botCommandsId) return;
-
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
+
+  if (message.channel.id !== botCommandsId && (command !== "eng" && command !== "english")) return;
 
   if (command === "stats") {
     let userId = message.author.id;
@@ -260,11 +260,18 @@ client.on("messageCreate", async (message) => {
       }
     });
   } else if (command === "eng" || command === "english") {
-    message.delete(100);
+    await message.delete();
+    const targetMessage = message.reference ? await message.channel.messages.fetch(message.reference.messageId) : null;
     const embed = new EmbedBuilder()
         .setTitle('📢  English Only Reminder\n')
         .setDescription("`Rule 7:` English in <#1229479282372251791> Channel\nTo maintain clear communication, **English** is required in the <#1229479282372251791> channel. This rule helps ensure that everyone can understand and engage in discussions effectively.\n\nPlease refer to the <#1252867798590558240> for more details on our guidelines. Conversations in other languages should occur in designated language channels (e.g., <#1252868140916801641> and other).\n\n**Failure to comply** with this policy will result in moderation actions, including possible time-outs.\n\nThank you for your understanding.");
-    const embedMessage = await message.channel.send({ embeds: [embed] });
+    if (targetMessage) {
+        const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
+        await targetMessage.reply({ embeds: [embed] });
+    }
+    else {
+      const embedMessage = await message.channel.send({ embeds: [embed] });
+    }
   } else if (command === "p") {
     const studyRoles = [
       {
