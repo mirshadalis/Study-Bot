@@ -60,14 +60,21 @@ client.once('ready', () => {
 client.on("voiceStateUpdate", (oldState, newState) => {
   let userId = newState.id;
 
-  const isJoining =
-    !oldState.channel &&
-    newState.channel &&
-    (newState.channel.parent?.name.toLowerCase().includes("voice channels") ||
-      newState.channel.parent?.name.toLowerCase().includes("custom rooms"));
-  const isLeaving = oldState.channel && !newState.channel;
+  const isStudyChannel = (channel) => {
+    if (!channel) return false; 
+    if (channel.parent?.name.toLowerCase().includes("voice channels") ||
+        channel.parent?.name.toLowerCase().includes("custom rooms")) {
+      return true; 
+    }
+    return false; 
+  };
 
-  if (isJoining || isLeaving) {
+  const isJoining = !oldState.channel && isStudyChannel(newState.channel);
+  const isLeaving = isStudyChannel(oldState.channel) && !newState.channel;
+  const isSwitching =
+    isStudyChannel(oldState.channel) && isStudyChannel(newState.channel);
+
+  if (isJoining || isLeaving || isSwitching) {
     return new Promise((resolve, reject) => {
       db.get(
         `SELECT * FROM studyTimes WHERE userId = ?`,
@@ -226,6 +233,7 @@ client.on("messageCreate", async (message) => {
         let longestStreak = `Longest study streak: ${row.longestStreak} day${row.longestStreak > 1 ? 's' : ''}`;
         const embedContent = "\`\`\`css\n" +  header + '\n\n' + dailyRow + '\n' + weeklyRow + '\n' + monthlyRow + '\n' + allTimeRow +'\n\n' + currentStreak + '\n' + longestStreak + "\`\`\`";
         const statsEmbed = new EmbedBuilder()
+        .setAuthor({ name: 'Study Space', iconURL: 'https://i.postimg.cc/tCS2g368/DALLE2024-06-1910-48-52-Aniconfora-Study-Spaceserver-Thebackgroundisasoftcalminglightbluecolor-Inthece.jpg' })
         .setColor("5095FF")
         .setDescription("```Study Performance Summary```\n" + embedContent)
         .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL()});
