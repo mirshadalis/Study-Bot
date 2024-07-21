@@ -2,7 +2,6 @@ const { Client, GatewayIntentBits, Partials, EmbedBuilder } = require('discord.j
 const sqlite3 = require('sqlite3').verbose();
 require('dotenv').config();
 const fs = require('fs');
-const { MessageChannel } = require('worker_threads');
 const token = process.env.TOKEN;
 
 const client = new Client({
@@ -18,8 +17,8 @@ const client = new Client({
 
 const PREFIX = "-";
 const dbPath = "./databases.sqlite";
-const botCommandsId = process.env.BOTCOMMANDS;
-const serverManagementCategory = process.env.SERVER_MANAGEMENT
+const botCommandsId = "1252940156927742065"; 
+const generalChannel = "1229479282372251791";
 
 const dbExists = fs.existsSync(dbPath);
 
@@ -64,8 +63,8 @@ client.on("voiceStateUpdate", (oldState, newState) => {
   const isJoining =
     !oldState.channel &&
     newState.channel &&
-    !newState.channel.parent?.name.toLowerCase().includes("others") &&
-    !newState.channel.name.toLowerCase().startsWith("chill-");
+    (newState.channel.parent?.name.toLowerCase().includes("voice channels") ||
+    newState.channel.parent?.name.toLowerCase().includes("custom rooms"));
   const isLeaving = oldState.channel && !newState.channel;
 
   if (isJoining || isLeaving) {
@@ -139,12 +138,11 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 client.on("messageCreate", async (message) => {
   if (!message.content.startsWith(PREFIX) || message.author.bot) return;
 
-  if (message.channel.id !== botCommandsId && message.channel.parentId !== serverManagementCategory) return;
-
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
   if (command === "stats") {
+    if (message.channel.id !== botCommandsId && message.channel.parentId != 1252874447359049850) return;
     let userId = message.author.id;
 
     try {
@@ -175,7 +173,8 @@ client.on("messageCreate", async (message) => {
       console.error("Error fetching study data:", error);
       message.channel.send("An error occurred while fetching your stats.");
     }
-  } else if (command === "lb") {
+  } else if (command === "lb" && message.channel.parentId != 1252874447359049850) {
+    if (message.channel.id !== botCommandsId) return;
     let page = 0;
     const itemsPerPage = 10;
 
@@ -261,7 +260,23 @@ client.on("messageCreate", async (message) => {
         message.channel.send("An error occurred while sending the leaderboard.");
       }
     });
+  } else if (command === "eng" || command === "english") {
+    await message.delete();
+    if (message.channel.id !== generalChannel && message.channel.parentId != 1252874447359049850) return;
+    const targetMessage = message.reference ? await message.channel.messages.fetch(message.reference.messageId) : null;
+    const embed = new EmbedBuilder()
+        .setTitle('📢  English Only Reminder\n')
+        .setDescription("`Rule 7:` English in <#1229479282372251791> Channel\nTo maintain clear communication, **English** is required in the <#1229479282372251791> channel. This rule helps ensure that everyone can understand and engage in discussions effectively.\n\nPlease refer to the <#1252867798590558240> for more details on our guidelines. Conversations in other languages should occur in designated language channels (e.g., <#1252868140916801641> and other).\n\n**Failure to comply** with this policy will result in moderation actions, including possible time-outs.\n\nThank you for your understanding.");
+    if (targetMessage) {
+      if(targetMessage.author.bot) return;
+        const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
+        await targetMessage.reply({ embeds: [embed] });
+    }
+    else {
+      const embedMessage = await message.channel.send({ embeds: [embed] });
+    }
   } else if (command === "p") {
+    if (message.channel.id !== botCommandsId && message.channel.parentId != 1252874447359049850) return;
     const studyRoles = [
       {
         name: "Novice Scholar",
@@ -276,7 +291,7 @@ client.on("messageCreate", async (message) => {
       {
         name: "Junior Scholar",
         time: millisecondsToHours(3 * 60 * 60 * 1000), 
-        roleId: "1254722592837861426",
+        roleId: "1254722592837861426", 
       },
       {
         name: "Adept Scholar",
@@ -291,33 +306,54 @@ client.on("messageCreate", async (message) => {
       {
         name: "Seasoned Scholar",
         time: millisecondsToHours(15 * 60 * 60 * 1000), 
-        roleId: "1254723152871977032",
+        roleId: "1254723284969197588",
+      },
+      {
+        name: "Advanced Scholar",
+        time: millisecondsToHours(15 * 60 * 60 * 1000), 
+        roleId: "1254723284969197588",
       },
       {
         name: "Expert Scholar",
         time: millisecondsToHours(20 * 60 * 60 * 1000),
-        roleId: "1254723261211631789",
-      },
-      {
-        name: "Senior Scholar",
-        time: millisecondsToHours(25 * 60 * 60 * 1000), 
-        roleId: "1254723427745726624",
+        roleId: "1254723566729953342",
       },
       {
         name: "Master Scholar",
         time: millisecondsToHours(30 * 60 * 60 * 1000), 
-        roleId: "1254723553560408135",
+        roleId: "1254723709458059339",
+      },
+      
+      {
+        name: "Senior Scholar",
+        time: millisecondsToHours(25 * 60 * 60 * 1000), 
+        roleId: "1254723826034409482",
       },
       {
-        name: "Sage Scholar",
+        name: "Elite Scholar",
         time: millisecondsToHours(40 * 60 * 60 * 1000), 
         roleId: "1254723724854390865",
+      },
+      {
+        name: "Prodigious Scholar",
+        time: millisecondsToHours(50 * 60 * 60 * 1000), 
+        roleId: "1254723824964859965",
+      },
+      {
+        name: "Renowned Scholar",
+        time: millisecondsToHours(50 * 60 * 60 * 1000), 
+        roleId: "1254723824964859965",
       },
       {
         name: "Legendary Scholar",
         time: millisecondsToHours(50 * 60 * 60 * 1000), 
         roleId: "1254723824964859965",
       },
+      {
+        name: "Eminent Scholar",
+        time: millisecondsToHours(50 * 60 * 60 * 1000), 
+        roleId: "1254723824964859965",
+      }
     ];
 
     const userId = message.author.id;
