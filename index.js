@@ -28,34 +28,34 @@ const db = new sqlite3.Database(dbPath, (err) => {
   } else {
     console.log("Connected to database successfully!");
 
-    if (!dbExists) {
-      db.run(
-        `
-           CREATE TABLE IF NOT EXISTS studyTimes (
-             userId TEXT PRIMARY KEY,
-             startTime TEXT,
-             total REAL DEFAULT 0.0
-           )
-         `,
-        (err) => {
-          if (err) {
-            console.error("Error creating table:", err);
-          } else {
-            console.log("Table created successfully!");
-          }
+    db.run(
+      `
+       CREATE TABLE IF NOT EXISTS studyTimes (
+         userId TEXT PRIMARY KEY,
+         startTime TEXT,
+         total REAL DEFAULT 0.0,
+         daily REAL DEFAULT 0.0,
+         weekly REAL DEFAULT 0.0,
+         monthly REAL DEFAULT 0.0,
+         streak INTEGER DEFAULT 0,
+         lastStudiedDate TEXT,
+         longestStreak INTEGER DEFAULT 0
+       )
+     `,
+      (err) => { 
+        if (err) {
+          console.error("Error creating table:", err);
+        } else {
+          console.log("Table created successfully!");
         }
-      );
-    }
-  }
+      }
+    );
+  } 
 });
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}!`);
 });
-
-function millisecondsToHours(milliseconds) {
-  return milliseconds / (1000 * 60 * 60);
-}
 
 client.on("voiceStateUpdate", (oldState, newState) => {
   let userId = newState.id;
@@ -64,7 +64,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
     !oldState.channel &&
     newState.channel &&
     (newState.channel.parent?.name.toLowerCase().includes("voice channels") ||
-    newState.channel.parent?.name.toLowerCase().includes("custom rooms"));
+      newState.channel.parent?.name.toLowerCase().includes("custom rooms"));
   const isLeaving = oldState.channel && !newState.channel;
 
   if (isJoining || isLeaving) {
@@ -79,11 +79,17 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             return;
           }
 
+          let now = new Date();
+          let todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          let thisWeekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
+          let thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
           if (isJoining) {
             if (!userData) {
               db.run(
-                `INSERT INTO studyTimes(userId, startTime, total) VALUES (?, ?, ?)`,
-                [userId, new Date().toISOString(), 0.0],
+                `INSERT INTO studyTimes(userId, startTime, total, daily, weekly, monthly, streak, lastStudiedDate, longestStreak) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, now.toISOString(), 0.0, 0.0, 0.0, 0.0, 0, null, 0],
                 (err) => {
                   if (err) {
                     console.error("Error inserting data:", err);
@@ -96,7 +102,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             } else if (!userData.startTime) {
               db.run(
                 `UPDATE studyTimes SET startTime = ? WHERE userId = ?`,
-                [new Date().toISOString(), userId],
+                [now.toISOString(), userId],
                 (err) => {
                   if (err) {
                     console.error("Error updating data:", err);
@@ -107,33 +113,74 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                 }
               );
             }
-          } else if (isLeaving) {
-            if (userData && userData.startTime) {
-              let startTime = new Date(userData.startTime);
-              let elapsedMilliseconds = new Date() - startTime;
-              let elapsedHours = millisecondsToHours(elapsedMilliseconds);
+          } else if (isLeaving && userData && userData.startTime) {
+            let startTime = new Date(userData.startTime);
+            let endTime = now;
+            let elapsedHours = (endTime - startTime) / (1000 * 60 * 60);
+            let dailyHours = (endTime > todayStart)
+              ? (endTime - (startTime > todayStart ? startTime : todayStart)) / (1000 * 60 * 60)
+              : 0.0;
+            let weeklyHours = (endTime > thisWeekStart)
+              ? (endTime - (startTime > thisWeekStart ? startTime : thisWeekStart)) / (1000 * 60 * 60)
+              : 0.0;
+            let monthlyHours = (endTime > thisMonthStart)
+              ? (endTime - (startTime > thisMonthStart ? startTime : thisMonthStart)) / (1000 * 60 * 60)
+              : 0.0;
 
-              let newTotal = parseFloat(userData.total) + elapsedHours;
+            // streak -irshad
+            let lastStudiedDate = userData.lastStudiedDate ? new Date(userData.lastStudiedDate) : null;
+            let yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
 
-              db.run(
-                `UPDATE studyTimes SET startTime = NULL, total = ? WHERE userId = ?`,
-                [newTotal, userId],
-                (err) => {
-                  if (err) {
-                    console.error("Error updating data:", err);
-                    reject(err);
-                  } else {
-                    resolve();
-                  }
-                }
-              );
+            let newStreak = userData.streak || 0;
+            if (
+              !lastStudiedDate ||
+              (lastStudiedDate.getFullYear() === yesterday.getFullYear() &&
+                lastStudiedDate.getMonth() === yesterday.getMonth() &&
+                lastStudiedDate.getDate() === yesterday.getDate())
+            ) {
+              newStreak++; 
+            } else {
+              newStreak = 1; 
             }
-          }
+
+            let newTotal = parseFloat(userData.total) + elapsedHours;
+            let newDaily = parseFloat(userData.daily) + dailyHours;
+            let newWeekly = parseFloat(userData.weekly || 0) + weeklyHours; 
+            let newMonthly = parseFloat(userData.monthly) + monthlyHours;
+            let newLongestStreak = Math.max(userData.longestStreak || 0, newStreak);
+
+            db.run(
+              `UPDATE studyTimes 
+               SET startTime = NULL, 
+                   total = ?, 
+                   daily = ?, 
+                   weekly = ?, 
+                   monthly = ?, 
+                   streak = ?, 
+                   lastStudiedDate = ?,
+                   longestStreak = ?
+               WHERE userId = ?`,
+              [newTotal, newDaily, newWeekly, newMonthly, newStreak, now.toISOString(), newLongestStreak, userId], 
+              (err) => {
+                if (err) {
+                  console.error("Error updating data:", err);
+                  reject(err);
+                } else {
+                  resolve();
+                }
+              }
+            );
+          } 
         }
       );
     }).catch(console.error);
   }
 });
+
+function padString(input, width) {
+  return input.padEnd(width);
+}
 
 client.on("messageCreate", async (message) => {
   if (!message.content.startsWith(PREFIX) || message.author.bot) return;
@@ -141,16 +188,14 @@ client.on("messageCreate", async (message) => {
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  if (command === "stats") {
-    if (message.channel.id !== botCommandsId && message.channel.parentId != 1252874447359049850) return;
+  if (command === 'stats') {
+    if (message.channel.id !== botCommandsId && message.channel.parentId !== "1252874447359049850") return; 
     let userId = message.author.id;
 
     try {
-      await client.emit('voiceStateUpdate', {}, { id: userId });
-
       const row = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT total FROM studyTimes WHERE userId = ?`,
+          `SELECT * FROM studyTimes WHERE userId = ?`,
           [userId],
           (err, row) => {
             if (err) reject(err);
@@ -160,10 +205,32 @@ client.on("messageCreate", async (message) => {
       });
 
       if (row) {
+        const [allTimeRank, monthlyRank, dailyRank, weeklyRank] = await Promise.all([
+          calculateRank('total', row.total),
+          calculateRank('monthly', row.monthly),
+          calculateRank('daily', row.daily),
+          calculateRank('weekly', row.weekly),
+        ]);
+
         let totalHours = row.total.toFixed(2);
-        message.channel.send(
-          `${message.author}, your total study time is: ${totalHours} hours`
-        );
+        let daily  = row.daily.toFixed(2);
+        let monthly = row.monthly.toFixed(2);
+        let weekly = row.weekly.toFixed(2);
+        const columnWidths = [15, 10, 5];
+        let header = `${padString("Timeframe", columnWidths[0])}${padString("Hours", columnWidths[1])}${padString("Place", columnWidths[2])}`;
+        let dailyRow = `${padString("Daily:", columnWidths[0])}${padString(`${daily}h`, columnWidths[1])}${padString(`#${dailyRank}`, columnWidths[2])}`;
+        let weeklyRow = `${padString("Weekly:", columnWidths[0])}${padString(`${weekly}h`, columnWidths[1])}${padString(`#${weeklyRank}`, columnWidths[2])}`;
+        let monthlyRow = `${padString("Monthly:", columnWidths[0])}${padString(`${monthly}h`, columnWidths[1])}${padString(`#${monthlyRank}`, columnWidths[2])}`;
+        let allTimeRow = `${padString("All-time:", columnWidths[0])}${padString(`${totalHours}h`, columnWidths[1])}${padString(`#${allTimeRank}`, columnWidths[2])}`;
+        let currentStreak = `Current study streak: ${row.streak} day${row.streak > 1 ? 's' : ''}`;
+        let longestStreak = `Longest study streak: ${row.longestStreak} day${row.longestStreak > 1 ? 's' : ''}`;
+        const embedContent = "\`\`\`css\n" +  header + '\n\n' + dailyRow + '\n' + weeklyRow + '\n' + monthlyRow + '\n' + allTimeRow +'\n\n' + currentStreak + '\n' + longestStreak + "\`\`\`";
+        const statsEmbed = new EmbedBuilder()
+        .setColor("5095FF")
+        .setDescription("```Study Performance Summary```\n" + embedContent)
+        .setFooter({ text: message.author.username, iconURL: message.author.displayAvatarURL()});
+        
+        const statsEmbedMessage = await message.channel.send({ embeds: [statsEmbed] });
       } else {
         message.channel.send(
           `${message.author}, you have no study time recorded!`
@@ -173,8 +240,8 @@ client.on("messageCreate", async (message) => {
       console.error("Error fetching study data:", error);
       message.channel.send("An error occurred while fetching your stats.");
     }
-  } else if (command === "lb" && message.channel.parentId != 1252874447359049850) {
-    if (message.channel.id !== botCommandsId) return;
+  } else if (command === "lb") {
+    if (message.channel.id !== botCommandsId && message.channel.parentId != 1252874447359049850) return;
     let page = 0;
     const itemsPerPage = 10;
 
@@ -277,155 +344,182 @@ client.on("messageCreate", async (message) => {
     }
   } else if (command === "p") {
     if (message.channel.id !== botCommandsId && message.channel.parentId != 1252874447359049850) return;
-    const studyRoles = [
-      {
-        name: "Novice Scholar",
-        time: millisecondsToHours(10 * 60 * 1000), 
-        roleId: "1254721791226810450",
-      },
-      {
-        name: "Apprentice Scholar",
-        time: millisecondsToHours(1 * 60 * 60 * 1000), 
-        roleId: "1254722449300389990",
-      },
-      {
-        name: "Junior Scholar",
-        time: millisecondsToHours(3 * 60 * 60 * 1000), 
-        roleId: "1254722592837861426", 
-      },
-      {
-        name: "Adept Scholar",
-        time: millisecondsToHours(5 * 60 * 60 * 1000), 
-        roleId: "1254722732470439967",
-      },
-      {
-        name: "Skilled Scholar",
-        time: millisecondsToHours(10 * 60 * 60 * 1000),
-        roleId: "1254722933008629780",
-      },
-      {
-        name: "Seasoned Scholar",
-        time: millisecondsToHours(15 * 60 * 60 * 1000), 
-        roleId: "1254723284969197588",
-      },
-      {
-        name: "Advanced Scholar",
-        time: millisecondsToHours(15 * 60 * 60 * 1000), 
-        roleId: "1254723284969197588",
-      },
-      {
-        name: "Expert Scholar",
-        time: millisecondsToHours(20 * 60 * 60 * 1000),
-        roleId: "1254723566729953342",
-      },
-      {
-        name: "Master Scholar",
-        time: millisecondsToHours(30 * 60 * 60 * 1000), 
-        roleId: "1254723709458059339",
-      },
-      
-      {
-        name: "Senior Scholar",
-        time: millisecondsToHours(25 * 60 * 60 * 1000), 
-        roleId: "1254723826034409482",
-      },
-      {
-        name: "Elite Scholar",
-        time: millisecondsToHours(40 * 60 * 60 * 1000), 
-        roleId: "1254723724854390865",
-      },
-      {
-        name: "Prodigious Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
-      },
-      {
-        name: "Renowned Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
-      },
-      {
-        name: "Legendary Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
-      },
-      {
-        name: "Eminent Scholar",
-        time: millisecondsToHours(50 * 60 * 60 * 1000), 
-        roleId: "1254723824964859965",
+    try {
+      const studyRoles = [
+        {
+          name: "Novice Scholar",
+          time: 0, 
+          roleId: "1254721791226810450",
+        },
+        {
+          name: "Apprentice Scholar",
+          time: 1, 
+          roleId: "1254722449300389990",
+        },
+        {
+          name: "Junior Scholar",
+          time: 3,
+          roleId: "1254722592837861426",
+        },
+        {
+          name: "Adept Scholar",
+          time: 5, 
+          roleId: "1254722732470439967",
+        },
+        {
+          name: "Skilled Scholar",
+          time: 10,
+          roleId: "1254722933008629780",
+        },
+        {
+          name: "Seasoned Scholar",
+          time: 15, 
+          roleId: "1254723284969197588",
+        },
+        {
+          name: "Advanced Scholar",
+          time: 20, 
+          roleId: "1254723489387249684",
+        },
+        {
+          name: "Expert Scholar",
+          time: 30,
+          roleId: "1254723566729953342",
+        },
+        {
+          name: "Master Scholar",
+          time: 40, 
+          roleId: "1254723709458059339",
+        },
+        
+        {
+          name: "Senior Scholar",
+          time: 50,
+          roleId: "1254723826034409482",
+        },
+        {
+          name: "Elite Scholar",
+          time: 65, 
+          roleId: "1254724434758209536",
+        },
+        {
+          name: "Prodigious Scholar",
+          time: 80, 
+          roleId: "1254724538659241997",
+        },
+        {
+          name: "Renowned Scholar",
+          time: 100, 
+          roleId: "1254724607014076497",
+        },
+        {
+          name: "Legendary Scholar",
+          time: 125, 
+          roleId: "1254724710885757009",
+        },
+        {
+          name: "Eminent Scholar",
+          time: 150, 
+          roleId: "1254724765659172864",
+        }
+      ];
+
+      const userId = message.author.id;
+      const member = message.guild.members.cache.get(userId);
+
+      if (!member) {
+        message.channel.send("Member not found.");
+        return;
       }
-    ];
 
-    const userId = message.author.id;
-    const member = message.guild.members.cache.get(userId);
-
-    if (!member) {
-      message.channel.send("Member not found.");
-      return;
-    }
-
-    db.get(
-      `SELECT total FROM studyTimes WHERE userId = ?`,
-      [userId],
-      (err, row) => {
-        if (err) {
-          console.error("Error fetching data:", err);
-          message.channel.send(
-            "An error occurred while fetching your study time."
-          );
-          return;
-        }
-
-        if (!row) {
-          message.channel.send(
-            "You have not recorded any study time yet."
-          );
-          return;
-        }
-
-        const totalStudyTime = parseFloat(row.total);
-
-        const newRoles = [];
-        const oldRoles = [];
-
-        studyRoles.forEach((role) => {
-          const guildRole = message.guild.roles.cache.get(role.roleId);
-
-          if (guildRole) {
-            if (totalStudyTime >= role.time) {
-              if (!member.roles.cache.has(role.roleId)) {
-                member.roles.add(role.roleId);
-                newRoles.push(guildRole.name);
-              }
-            } else {
-              if (member.roles.cache.has(role.roleId)) {
-                member.roles.remove(role.roleId);
-                oldRoles.push(guildRole.name);
-              }
-            }
-          } else {
-            console.error(`Role ${role.name} not found in the server.`);
+      const row = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT * FROM studyTimes WHERE userId = ?`,
+          [userId],
+          (err, row) => {
+            if (err) reject(err); 
+            else resolve(row);
           }
-        });
+        );
+      });
 
-        let responseMessage = "Roles updated:\n";
-
-        if (newRoles.length > 0) {
-          responseMessage += `Added: ${newRoles.join(", ")}\n`;
-        }
-
-        if (oldRoles.length > 0) {
-          responseMessage += `Removed: ${oldRoles.join(", ")}`;
-        }
-
-        if (newRoles.length === 0 && oldRoles.length === 0) {
-          responseMessage += "No role changes.";
-        }
-
-        message.channel.send(responseMessage);
+      if (!row) {
+        return message.channel.send("You have not recorded any study time yet.");
       }
-    );
+
+      const monthlyStudyTime = parseFloat(row.monthly);
+      const responseMessage = await updateRoles(member, monthlyStudyTime, studyRoles);
+      message.channel.send(responseMessage);
+    } catch (error) {
+      console.error("Error updating roles:", error);
+      message.channel.send("An error occurred while updating your roles.");
+    }
   }
 });
+
+async function updateRoles(member, totalStudyTime, studyRoles) {
+  const newRoles = [];
+  const removedRoles = []; 
+
+  for (const roleData of studyRoles) {
+    const guildRole = member.guild.roles.cache.get(roleData.roleId);
+
+    if (!guildRole) {
+      console.error(`Role ${roleData.name} not found in the server.`);
+      continue; 
+    }
+
+    if (totalStudyTime >= roleData.time && !member.roles.cache.has(roleData.roleId)) {
+      await member.roles.add(roleData.roleId).catch(console.error); 
+      newRoles.push(guildRole.name);
+    } else if (totalStudyTime < roleData.time && member.roles.cache.has(roleData.roleId)) {
+      await member.roles.remove(roleData.roleId).catch(console.error);
+      removedRoles.push(guildRole.name);
+    }
+  }
+
+  let responseMessage = "Roles updated:\n";
+
+  if (newRoles.length > 0) {
+    responseMessage += `Added: ${newRoles.join(", ")}\n`;
+  }
+
+  if (removedRoles.length > 0) {
+    responseMessage += `Removed: ${removedRoles.join(", ")}\n`;
+  }
+
+  if (newRoles.length === 0 && removedRoles.length === 0) {
+    responseMessage = "No role changes."; 
+  }
+
+  return responseMessage;
+}
+
+
+async function calculateRank(statColumn, userStatValue) {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(DISTINCT userId) AS rank 
+         FROM studyTimes 
+         WHERE ${statColumn} >= ?`, 
+        [userStatValue],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row ? row.rank : 0); 
+          }
+        }
+      );
+    });
+
+    return result;
+
+  } catch (error) {
+    console.error(`Error calculating rank for ${statColumn}:`, error);
+    throw error;
+  }
+}
 
 client.login(token);
