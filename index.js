@@ -28,43 +28,43 @@ const db = new sqlite3.Database(dbPath, (err) => {
   } else {
     console.log("Connected to database successfully!");
 
-    if (!dbExists) {
-      db.run(
-        `
-           CREATE TABLE IF NOT EXISTS studyTimes (
-             userId TEXT PRIMARY KEY,
-             startTime TEXT,
-             total REAL DEFAULT 0.0
-           )
-         `,
-        (err) => {
-          if (err) {
-            console.error("Error creating table:", err);
-          } else {
-            console.log("Table created successfully!");
-          }
+    // Use db.run with a callback for table creation inside db connection check:
+    db.run(
+      `
+       CREATE TABLE IF NOT EXISTS studyTimes (
+         userId TEXT PRIMARY KEY,
+         startTime TEXT,
+         total REAL DEFAULT 0.0,
+         daily REAL DEFAULT 0.0,
+         monthly REAL DEFAULT 0.0,
+         allTime REAL DEFAULT 0.0,
+         streak INTEGER DEFAULT 0,
+         lastStudiedDate TEXT,
+         longestStreak INTEGER DEFAULT 0
+       )
+     `,
+      (err) => { 
+        if (err) {
+          console.error("Error creating table:", err);
+        } else {
+          console.log("Table created successfully!");
         }
-      );
-    }
-  }
+      }
+    );
+  } 
 });
 
 client.once('ready', () => {
   console.log(`Logged in as ${client.user.tag}!`);
 });
 
-function millisecondsToHours(milliseconds) {
-  return milliseconds / (1000 * 60 * 60);
-}
-
 client.on("voiceStateUpdate", (oldState, newState) => {
   let userId = newState.id;
-
   const isJoining =
     !oldState.channel &&
     newState.channel &&
     (newState.channel.parent?.name.toLowerCase().includes("voice channels") ||
-    newState.channel.parent?.name.toLowerCase().includes("custom rooms"));
+      newState.channel.parent?.name.toLowerCase().includes("custom rooms"));
   const isLeaving = oldState.channel && !newState.channel;
 
   if (isJoining || isLeaving) {
@@ -79,11 +79,16 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             return;
           }
 
+          let now = new Date();
+          let todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          let thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
           if (isJoining) {
             if (!userData) {
               db.run(
-                `INSERT INTO studyTimes(userId, startTime, total) VALUES (?, ?, ?)`,
-                [userId, new Date().toISOString(), 0.0],
+                `INSERT INTO studyTimes(userId, startTime, total, daily, monthly, allTime, streak, lastStudiedDate) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [userId, now.toISOString(), 0.0, 0.0, 0.0, 0.0, 0, null],
                 (err) => {
                   if (err) {
                     console.error("Error inserting data:", err);
@@ -96,7 +101,7 @@ client.on("voiceStateUpdate", (oldState, newState) => {
             } else if (!userData.startTime) {
               db.run(
                 `UPDATE studyTimes SET startTime = ? WHERE userId = ?`,
-                [new Date().toISOString(), userId],
+                [now.toISOString(), userId],
                 (err) => {
                   if (err) {
                     console.error("Error updating data:", err);
@@ -107,28 +112,65 @@ client.on("voiceStateUpdate", (oldState, newState) => {
                 }
               );
             }
-          } else if (isLeaving) {
-            if (userData && userData.startTime) {
-              let startTime = new Date(userData.startTime);
-              let elapsedMilliseconds = new Date() - startTime;
-              let elapsedHours = millisecondsToHours(elapsedMilliseconds);
+          } else if (isLeaving && userData && userData.startTime) {
+            let startTime = new Date(userData.startTime);
+            let endTime = now;
+            let elapsedHours = (endTime - startTime) / (1000 * 60 * 60);
+            let dailyHours = (endTime > todayStart)
+              ? (endTime - (startTime > todayStart ? startTime : todayStart)) / (1000 * 60 * 60)
+              : 0.0;
+            let monthlyHours = (endTime > thisMonthStart)
+              ? (endTime - (startTime > thisMonthStart ? startTime : thisMonthStart)) / (1000 * 60 * 60)
+              : 0.0;
 
-              let newTotal = parseFloat(userData.total) + elapsedHours;
+            // streak calculation - irshad
+            let lastStudiedDate = userData.lastStudiedDate ? new Date(userData.lastStudiedDate) : null;
+            let yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
 
-              db.run(
-                `UPDATE studyTimes SET startTime = NULL, total = ? WHERE userId = ?`,
-                [newTotal, userId],
-                (err) => {
-                  if (err) {
-                    console.error("Error updating data:", err);
-                    reject(err);
-                  } else {
-                    resolve();
-                  }
-                }
-              );
+            let newStreak = userData.streak || 0;
+            if (
+              !lastStudiedDate ||
+              (lastStudiedDate.getFullYear() === yesterday.getFullYear() &&
+                lastStudiedDate.getMonth() === yesterday.getMonth() &&
+                lastStudiedDate.getDate() === yesterday.getDate())
+            ) {
+              newStreak++; 
+            } else {
+              newStreak = 1; 
             }
-          }
+
+            // Update Database
+            let newTotal = parseFloat(userData.total) + elapsedHours;
+            let newDaily = parseFloat(userData.daily) + dailyHours;
+            let newMonthly = parseFloat(userData.monthly) + monthlyHours;
+            let newAllTime = parseFloat(userData.allTime) + elapsedHours;
+            let newLongestStreak = userData.longestStreak || 0;
+            if (newStreak > newLongestStreak) {
+              newLongestStreak = newStreak;
+            }
+            db.run(
+              `UPDATE studyTimes 
+               SET startTime = NULL, 
+                   total = ?, 
+                   daily = ?, 
+                   monthly = ?, 
+                   allTime = ?,
+                   streak = ?, 
+                   lastStudiedDate = ?,
+                   longestStreak = ?
+               WHERE userId = ?`,
+               [newTotal, newDaily, newMonthly, newAllTime, newStreak, now.toISOString(), newLongestStreak, userId],
+              (err) => {
+                if (err) {
+                  console.error("Error updating data:", err);
+                  reject(err);
+                } else {
+                  resolve();
+                }
+              }
+            );
+          } 
         }
       );
     }).catch(console.error);
@@ -173,8 +215,8 @@ client.on("messageCreate", async (message) => {
       console.error("Error fetching study data:", error);
       message.channel.send("An error occurred while fetching your stats.");
     }
-  } else if (command === "lb" && message.channel.parentId != 1252874447359049850) {
-    if (message.channel.id !== botCommandsId) return;
+  } else if (command === "lb") {
+    if (message.channel.id !== botCommandsId && message.channel.parentId != 1252874447359049850) return;
     let page = 0;
     const itemsPerPage = 10;
 
@@ -280,7 +322,7 @@ client.on("messageCreate", async (message) => {
     const studyRoles = [
       {
         name: "Novice Scholar",
-        time: millisecondsToHours(10 * 60 * 1000), 
+        time: 1, 
         roleId: "1254721791226810450",
       },
       {
