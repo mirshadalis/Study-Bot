@@ -183,16 +183,14 @@ client.on("messageCreate", async (message) => {
   const args = message.content.slice(PREFIX.length).trim().split(/ +/);
   const command = args.shift().toLowerCase();
 
-  if (command === "stats") {
-    if (message.channel.id !== botCommandsId && message.channel.parentId != 1252874447359049850) return;
+  if (command === 'stats') {
+    if (message.channel.id !== botCommandsId && message.channel.parentId !== "1252874447359049850") return; 
     let userId = message.author.id;
 
     try {
-      await client.emit('voiceStateUpdate', {}, { id: userId });
-
       const row = await new Promise((resolve, reject) => {
         db.get(
-          `SELECT total FROM studyTimes WHERE userId = ?`,
+          `SELECT * FROM studyTimes WHERE userId = ?`,
           [userId],
           (err, row) => {
             if (err) reject(err);
@@ -202,10 +200,25 @@ client.on("messageCreate", async (message) => {
       });
 
       if (row) {
+        // Calculate ranks 
+        const [allTimeRank, monthlyRank, dailyRank] = await Promise.all([
+          calculateRank('allTime', row.allTime),
+          calculateRank('monthly', row.monthly),
+          calculateRank('daily', row.daily),
+        ]);
+
         let totalHours = row.total.toFixed(2);
-        message.channel.send(
-          `${message.author}, your total study time is: ${totalHours} hours`
-        );
+        let daily  = row.daily.toFixed(2);
+        let monthly = row.monthly.toFixed(2);
+        message.channel.send(`
+          **Your Study Stats:**
+          Total: ${totalHours} hours 
+          Daily: ${daily} hours (Rank: ${dailyRank}) 
+          Monthly: ${monthly} hours (Rank: ${monthlyRank})
+          All-Time: ${totalHours} hours (Rank: ${allTimeRank}) 
+          Current Streak: ${row.streak} days
+          Longest Streak: ${row.longestStreak} days
+        `);
       } else {
         message.channel.send(
           `${message.author}, you have no study time recorded!`
@@ -469,5 +482,31 @@ client.on("messageCreate", async (message) => {
     );
   }
 });
+
+async function calculateRank(statColumn, userStatValue) {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.get(
+        `SELECT COUNT(DISTINCT userId) AS rank 
+         FROM studyTimes 
+         WHERE ${statColumn} >= ?`, 
+        [userStatValue],
+        (err, row) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(row ? row.rank : 0); 
+          }
+        }
+      );
+    });
+
+    return result;
+
+  } catch (error) {
+    console.error(`Error calculating rank for ${statColumn}:`, error);
+    throw error;
+  }
+}
 
 client.login(token);
