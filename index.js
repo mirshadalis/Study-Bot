@@ -356,7 +356,7 @@ client.on("messageCreate", async (message) => {
       const studyRoles = [
         {
           name: "Novice Scholar",
-          time: 0.6, 
+          time: 0.17, 
           roleId: "1254721791226810450",
         },
         {
