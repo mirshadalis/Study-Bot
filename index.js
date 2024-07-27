@@ -356,7 +356,7 @@ client.on("messageCreate", async (message) => {
       const studyRoles = [
         {
           name: "Novice Scholar",
-          time: 0.6, 
+          time: 0.17, 
           roleId: "1254721791226810450",
         },
         {
@@ -436,7 +436,7 @@ client.on("messageCreate", async (message) => {
       const member = message.guild.members.cache.get(userId);
 
       if (!member) {
-        message.channel.send("Member not found.");
+        console.log("Member not found.");
         return;
       }
 
@@ -457,13 +457,53 @@ client.on("messageCreate", async (message) => {
 
       const monthlyStudyTime = parseFloat(row.monthly);
       const responseMessage = await updateRoles(member, monthlyStudyTime, studyRoles);
-      message.channel.send(responseMessage);
+      const { currentRole, nextRole, hoursLeft, currentRank } = await calculateRoleProgress(member, monthlyStudyTime, studyRoles);
+      //message.channel.send(responseMessage);
+      const currentDate = new Date();
+      const currentMonth = currentDate.getMonth(); 
+      const month = ["","January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      const embed = {
+        color: 0x0099ff,
+        title: `Montly Level Statistics (${month[currentMonth]})`,
+        description: `**User:** \`${message.author.username}\`\n\n
+         **Current Montly Level:** ${currentRole ? `<@&${currentRole.roleId}>` : "<@&$1254721791226810450>"}
+        **Next Monthly Level:** ${nextRole ? `<@&${nextRole.roleId}>` : '<@&1254722449300389990>'}
+        **Level Rank:** \`🏆${currentRole ? `${currentRank}/${studyRoles.length}` : '1/15'}\`
+         **Level Promotion in:** \`${nextRole ? `${hoursLeft.toFixed(2)}` : '1.00'}\`hours`,
+      };
+
+      message.channel.send({ embeds: [embed] });
     } catch (error) {
       console.error("Error updating roles:", error);
       message.channel.send("An error occurred while updating your roles.");
     }
   }
 });
+
+async function calculateRoleProgress(member, totalStudyTime, studyRoles) {
+  let currentRole = null;
+  let nextRole = null;
+  let hoursLeft = 0;
+  let currentRank = 1;
+
+  for (let i = 0; i < studyRoles.length; i++) {
+    const roleData = studyRoles[i];
+
+    if (totalStudyTime >= roleData.time) {
+      currentRole = roleData; 
+      currentRank = i + 1;
+
+      if (i < studyRoles.length - 1) {
+        nextRole = studyRoles[i + 1];
+        hoursLeft = nextRole.time - totalStudyTime;
+      } 
+    } 
+  }
+
+  return { currentRole, nextRole, hoursLeft, currentRank };
+}
 
 async function updateRoles(member, totalStudyTime, studyRoles) {
   const newRoles = [];
