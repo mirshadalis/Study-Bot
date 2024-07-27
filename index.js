@@ -468,9 +468,9 @@ client.on("messageCreate", async (message) => {
         color: 0x0099ff,
         title: `Montly Level Statistics (${month[currentMonth]})`,
         description: `**User:** \`${message.author.username}\`\n\n
-         **Current Montly Level:** ${currentRole ? `<@&${currentRole.roleId}>` : "<@&$1254721791226810450>"}\n 
-         **Next Monthly Level:** ${nextRole ? `<@&${nextRole.roleId}>` : '<@&1254722449300389990>'}\n
-         **Level Rank:** \`🏆${currentRole ? `${currentRank}/${studyRoles.length}` : '1/15'}\`\n
+         **Current Montly Level:** ${currentRole ? `<@&${currentRole.roleId}>` : "<@&$1254721791226810450>"}
+        **Next Monthly Level:** ${nextRole ? `<@&${nextRole.roleId}>` : '<@&1254722449300389990>'}
+        **Level Rank:** \`🏆${currentRole ? `${currentRank}/${studyRoles.length}` : '1/15'}\`
          **Level Promotion in:** \`${nextRole ? `${hoursLeft.toFixed(2)}` : '1.00'}\`hours`,
       };
 
